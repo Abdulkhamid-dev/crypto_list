@@ -1,26 +1,23 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Select,  Button, Layout, Table, message } from "antd";
+import { Select, Button, Layout, Table, message, Popconfirm } from "antd";
 import { StyledMain } from "./Main.style";
 import Logo from "../../../assets/img/crypto_logo.png";
 import axios from "axios";
-import {
-  TiArrowSortedDown,
-  TiArrowSortedUp,
-} from "react-icons/ti";
+import { HiArrowTrendingDown, HiOutlineArrowTrendingUp } from "react-icons/hi2";
 type TCoin = {
   name: string;
   USD: number;
 };
-const { Header, Content, Footer } = Layout;
+const { Header, Content } = Layout;
 function Main() {
   const prevCoins = useRef<TCoin[]>([]);
   const [searchVal, setSearchVal] = useState<string>("");
-  const [coinList, setCoinList] = useState<string[]>(["DOGE", "BTC"]);
+  const [coinList, setCoinList] = useState<string[]>(["DOGE"]);
   const [coinData, setCoinData] = useState<TCoin[]>([]);
 
   const handleSearch = () => {
     if (coinList.includes(searchVal)) {
-      alert("Already exist");
+      message.warning("This currency already exist");
     } else {
       setCoinList([...coinList, searchVal]);
     }
@@ -31,19 +28,21 @@ function Main() {
       const { data } = await axios.get(
         `https://min-api.cryptocompare.com/data/price?fsym=${coin}&tsyms=USD&api_key=4467f9c263b8d45582b456a0d5e9fe7189406c9234c8e7c731db239b904de84d&gt`
       );
-      return data;
-    } catch (error) {}
+      return { name: coin, USD: data.USD };
+    } catch (error) {
+      return error;
+    }
   };
 
   const getData = async () => {
-    let result: TCoin[] = [];
-    coinList.forEach(async (coin) => {
-      let data = await getCoin(coin);
-      result.push({ name: coin, USD: data.USD });
-    });
-    setTimeout(() => {
-      setCoinData(result);
-    }, 1000);
+    let promiseArray: any[] = [];
+    for (let i = 0; i < coinList.length; i++) {
+      promiseArray.push(getCoin(coinList[i]));
+    }
+
+    Promise.all(promiseArray)
+      .then((values) => setCoinData(values))
+      .catch((err) => console.log(err));
   };
 
   const calcWithPrev = (coin: TCoin) => {
@@ -51,12 +50,11 @@ function Main() {
       let currentCoin = prevCoins.current.find(
         (item) => item.name === coin.name
       );
-      console.log(currentCoin);
       if (currentCoin) {
         return coin.USD > currentCoin.USD ? (
-          <TiArrowSortedUp color="green" />
+          <HiOutlineArrowTrendingUp size={25} color="green" />
         ) : coin.USD < currentCoin.USD ? (
-          <TiArrowSortedDown color="red" />
+          <HiArrowTrendingDown size={25} color="red" />
         ) : (
           "-"
         );
@@ -67,6 +65,17 @@ function Main() {
       return "-";
     }
   };
+
+
+  const deleteCoin = (coinName: string) => {
+    let filteredCoinList = coinList.filter((item: string) => item !== coinName);
+    let filteredCoins = coinData.filter(
+      (item: TCoin) => item.name !== coinName
+    );
+    setCoinList(filteredCoinList);
+    setCoinData(filteredCoins);
+  };
+
 
   const columns = [
     {
@@ -95,14 +104,32 @@ function Main() {
       },
     },
     {
-      title: "In Graphic",
+      title: "Rate",
       dataIndex: "",
-      key: "graphics",
+      key: "rate",
       render: (record: any, text: any) => {
         return calcWithPrev(record);
       },
     },
+    {
+      title: "Actions",
+      dataIndex: "",
+      key: "actions",
+      render: (record: any, text: any) => {
+        return (
+          <Popconfirm
+            title="Delete the currency"
+            onConfirm={() => deleteCoin(record?.name)}
+          >
+            <Button type="primary" danger>
+              Delete
+            </Button>
+          </Popconfirm>
+        );
+      },
+    },
   ];
+
   useEffect(() => {
     getData();
     const interval = setInterval(() => {
@@ -110,6 +137,7 @@ function Main() {
     }, 5000);
     return () => clearInterval(interval);
   }, [coinList]);
+  
 
   useEffect(() => {
     prevCoins.current = coinData;
